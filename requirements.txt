@@ -1,7 +1,8 @@
 streamlit>=1.22.0
 pdfminer.six>=20221105
 python-docx>=0.8.11
-spacy>=3.5.0
+spacy>=3.0.0
+https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.7.0/fr_core_news_md-3.7.0-py3-none-any.whl
 nltk>=3.8.1
 scikit-learn>=1.2.2
 pandas>=1.5.3
