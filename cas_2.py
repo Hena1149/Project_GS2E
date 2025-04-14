@@ -14,8 +14,8 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import CountVectorizer
 
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Analyse de Documents Contractuels", layout="wide")
-st.title("📑 Outil d'Analyse de Documents Contractuels")
+st.set_page_config(page_title="Génération Automatique de Cas de test", layout="wide")
+st.title("📑 Génération Automatique de Cas de test")
 
 # Téléchargements NLTK (un seul fois)
 nltk.download('punkt')
