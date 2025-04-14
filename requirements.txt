@@ -4,7 +4,6 @@ pdfminer.six==20221105
 python-docx==0.8.11
 spacy==3.5.0
 https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.7.0/fr_core_news_md-3.7.0-py3-none-any.whl
-python -m spacy download fr_core_news_md
 fr-core-news-md==3.5.0  # Modèle français pré-téléchargé
 nltk==3.8.1
 scikit-learn==1.2.2
