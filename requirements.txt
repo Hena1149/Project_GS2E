@@ -1,9 +1,2 @@
-# Version optimisée pour le déploiement
-streamlit==1.22.0
-pdfminer.six==20221105
-python-docx==0.8.11
-spacy==3.5.0
-fr-core-news-md==3.5.0  # Modèle français pré-téléchargé
-nltk==3.8.1
-scikit-learn==1.2.2
-pandas==1.5.3
+streamlit
+pandas
