@@ -58,36 +58,136 @@ def load_nlp_model():
 
 def extract_business_rules(text, nlp_model):
     """
-    Extrait les règles métier du texte en utilisant une combinaison de motifs regex et d'analyse NLP
+    Version améliorée de l'extraction des règles de gestion
+    Combine regex avancés et analyse NLP avec spaCy
     """
-    # Motifs regex pour les règles communes
+    # 1. Prétraitement du texte
+    text = fix_incomplete_lines(text)
+    
+    # 2. Extraction avec motifs regex améliorés
     patterns = [
-        r"(Si|Lorsqu’|Quand|Dès que|En cas de).*?(alors|doit|devra|est tenu de|nécessite|implique|entraîne|peut).*?\.",
-        r"(Tout utilisateur|L’[a-zA-Z]+|Un client|Le système|Une demande).*?(doit|est tenu de|devra|ne peut pas|ne doit pas|est interdit de).*?\.",
-        r"(Le non-respect|Toute infraction|Une violation).*?(entraîne|provoque|peut entraîner|résulte en|sera soumis à).*?\.",
-        r"(L’utilisateur|Le client|Le prestataire|L’agent|Le système).*?(est autorisé à|peut|a le droit de).*?\."
+        # Structures conditionnelles
+        r"(Si|Lorsque|Lorsqu'|Quand|Dès que|En cas de|Au cas où)\b.*?"
+        r"(alors|doit|devra|est tenu de|nécessite|implique|entraîne|peut|sera)\b.*?[.;]",
+        
+        # Obligations
+        r"(L'?utilisateur|Le client|Le système|L'?application|Un administrateur)\b.*?"
+        r"(doit|est tenu de|devra|a l'obligation de|est responsable de)\b.*?[.;]",
+        
+        # Interdictions
+        r"(Il est interdit|Ne doit pas|Est prohibé|N'est pas autorisé)\b.*?[.;]",
+        
+        # Contrôles/Validations
+        r"(Vérifier|Valider|Contrôler|S'assurer que|Garantir)\b.*?[.;]",
+        
+        # Conséquences
+        r"(En cas de|Si non respect|En cas de non-conformité)\b.*?"
+        r"(entraîne|provoque|conduit à|aura pour effet)\b.*?[.;]",
+        
+        # Droits/autorisations
+        r"(L'?utilisateur|Le client|Le prestataire|L'?agent|Le système)\b.*?"
+        r"(est autorisé à|peut|a le droit de)\b.*?[.;]"
     ]
     
     rules = set()
-    
-    # Extraction par motifs regex
     for pattern in patterns:
         matches = re.finditer(pattern, text, re.IGNORECASE)
         for match in matches:
-            rules.add(clean_rule(match.group()))
+            rule = clean_business_rule(match.group())
+            if is_valid_rule(rule):
+                rules.add(rule)
     
-    # Extraction NLP si le modèle est disponible
+    # 3. Extraction NLP si le modèle est disponible
     if nlp_model:
         doc = nlp_model(text)
+        
         for sent in doc.sents:
-            # Détection des phrases contenant des termes réglementaires
-            if any(keyword in sent.text.lower() for keyword in ["si ", "alors", "doit", "est tenu de", "ne peut pas", "entraîne", "provoque",
-            "peut entraîner", "doit être", "est obligatoire", "a le droit de", "est autorisé à"]):
-                # Filtrage des phrases trop courtes
-                if len(sent.text.split()) > 5:
-                    rules.add(clean_rule(sent.text))
+            sent_text = sent.text.strip()
+            
+            # Détection des phrases contenant des marqueurs de règles
+            if is_business_rule_sentence(sent):
+                rule = clean_business_rule(sent_text)
+                if is_valid_rule(rule):
+                    rules.add(rule)
     
-    return sorted(rules, key=lambda x: len(x), reverse=True)
+    # 4. Post-traitement des règles
+    rules = clean_short_rules(rules)
+    rules = sorted(rules, key=lambda x: len(x), reverse=True)
+    
+    return rules
+
+# Fonctions utilitaires améliorées
+def fix_incomplete_lines(text):
+    """Corrige les phrases de conditions coupées en fusionnant les lignes incomplètes"""
+    lines = text.split("\n")
+    fixed_lines = []
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.lower().startswith(("si ", "lorsqu'", "quand ", "dès que ", "en cas de ")):
+            # Fusion avec la ligne suivante si la phrase n'est pas terminée
+            while i + 1 < len(lines) and not line.endswith(('.', ';')):
+                i += 1
+                next_line = lines[i].strip()
+                if next_line:  # Évite d'ajouter des lignes vides
+                    line += " " + next_line
+        fixed_lines.append(line)
+        i += 1
+    
+    return "\n".join(fixed_lines)
+
+def clean_business_rule(rule_text):
+    """Nettoie et formate une règle de gestion"""
+    # Suppression des espaces multiples et caractères spéciaux indésirables
+    rule_text = re.sub(r"[^\w\sàâäéèêëîïôöùûüç,;.']", " ", rule_text, flags=re.IGNORECASE)
+    rule_text = re.sub(r"\s+", " ", rule_text).strip()
+    
+    # Capitalisation et ponctuation
+    if rule_text:
+        rule_text = rule_text[0].upper() + rule_text[1:]
+        if not rule_text.endswith(('.', ';')):
+            rule_text += '.'
+    
+    return rule_text
+
+def is_valid_rule(rule_text):
+    """Valide qu'une règle extraite est complète"""
+    words = rule_text.split()
+    return (len(words) > 4 and  # Règles d'au moins 5 mots
+            not rule_text.startswith(('Comment ', 'Pourquoi ', 'Quand ', 'Où ')) and
+            not any(word in rule_text.lower() for word in ['exemple', 'note', 'remarque']))
+
+def is_business_rule_sentence(sent):
+    """Détermine si une phrase est une règle métier valide avec spaCy"""
+    # Liste des termes déclencheurs
+    rule_keywords = {
+        'VERB': ['devoir', 'falloir', 'pouvoir', 'interdire', 'autoriser'],
+        'NOUN': ['obligation', 'interdiction', 'condition', 'requis', 'validation'],
+        'ADJ': ['obligatoire', 'interdit', 'autorisé', 'requis']
+    }
+    
+    # Vérifie la présence de termes clés
+    has_keyword = False
+    for token in sent:
+        if token.text.lower() in ['si', 'alors', 'doit', 'nécessite']:
+            has_keyword = True
+        if token.pos_ in rule_keywords and token.lemma_ in rule_keywords[token.pos_]:
+            has_keyword = True
+    
+    # Vérifie la structure de la phrase
+    has_conditional = any(token.dep_ == "mark" for token in sent)  # Marqueurs de condition
+    has_modal = any(token.dep_ == "aux" for token in sent)         # Verbes modaux
+    
+    return (len(sent) > 5 and 
+            (has_keyword or has_conditional or has_modal) and
+            not any(ent.label_ == "DATE" for ent in sent.ents))    # Exclut les dates
+
+def clean_short_rules(rules):
+    """Filtre les règles trop courtes ou incomplètes"""
+    return [rule for rule in rules 
+            if len(rule.split()) > 4 and 
+            not rule.lower().startswith(('page ', 'article ', 'paragraphe '))]
 
 
 
