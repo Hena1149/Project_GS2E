@@ -99,6 +99,21 @@ def clean_text(text, nlp_model, min_word_length=3):
     return " ".join(cleaned_tokens)
 
 
+def generate_wordcloud(freq_dict, width=800, height=400, background_color="white", colormap="viridis"):
+    """Génère un nuage de mots"""
+    fig, ax = plt.subplots(figsize=(10, 5))
+    wc = WordCloud(
+        width=width,
+        height=height,
+        background_color=background_color,
+        colormap=colormap,
+        max_words=100
+    ).generate_from_frequencies(freq_dict)
+    
+    ax.imshow(wc, interpolation="bilinear")
+    ax.axis("off")
+    return fig
+
 def clean_rule_text(rule):
     """Nettoyage intelligent des règles"""
     # Suppression des numéros et puces
