@@ -56,65 +56,130 @@ def load_nlp_model():
         return None
 
 
-def extract_business_rules(text, nlp_model):
-    """
-    Version améliorée de l'extraction des règles de gestion
-    Combine regex avancés et analyse NLP avec spaCy
-    """
-    # 1. Prétraitement du texte
-    text = fix_incomplete_lines(text)
+# def extract_business_rules(text, nlp_model):
+#     """
+#     Version améliorée de l'extraction des règles de gestion
+#     Combine regex avancés et analyse NLP avec spaCy
+#     """
+#     # 1. Prétraitement du texte
+#     text = fix_incomplete_lines(text)
     
-    # 2. Extraction avec motifs regex améliorés
-    patterns = [
-        # Structures conditionnelles
-        r"(Si|Lorsque|Lorsqu'|Quand|Dès que|En cas de|Au cas où)\b.*?"
-        r"(alors|doit|devra|est tenu de|nécessite|implique|entraîne|peut|sera)\b.*?[.;]",
+#     # 2. Extraction avec motifs regex améliorés
+#     patterns = [
+#         # Structures conditionnelles
+#         r"(Si|Lorsque|Lorsqu'|Quand|Dès que|En cas de|Au cas où)\b.*?"
+#         r"(alors|doit|devra|est tenu de|nécessite|implique|entraîne|peut|sera)\b.*?[.;]",
         
-        # Obligations
-        r"(L'?utilisateur|Le client|Le système|L'?application|Un administrateur)\b.*?"
-        r"(doit|est tenu de|devra|a l'obligation de|est responsable de)\b.*?[.;]",
+#         # Obligations
+#         r"(L'?utilisateur|Le client|Le système|L'?application|Un administrateur)\b.*?"
+#         r"(doit|est tenu de|devra|a l'obligation de|est responsable de)\b.*?[.;]",
         
-        # Interdictions
-        r"(Il est interdit|Ne doit pas|Est prohibé|N'est pas autorisé)\b.*?[.;]",
+#         # Interdictions
+#         r"(Il est interdit|Ne doit pas|Est prohibé|N'est pas autorisé)\b.*?[.;]",
         
-        # Contrôles/Validations
-        r"(Vérifier|Valider|Contrôler|S'assurer que|Garantir)\b.*?[.;]",
+#         # Contrôles/Validations
+#         r"(Vérifier|Valider|Contrôler|S'assurer que|Garantir)\b.*?[.;]",
         
-        # Conséquences
-        r"(En cas de|Si non respect|En cas de non-conformité)\b.*?"
-        r"(entraîne|provoque|conduit à|aura pour effet)\b.*?[.;]",
+#         # Conséquences
+#         r"(En cas de|Si non respect|En cas de non-conformité)\b.*?"
+#         r"(entraîne|provoque|conduit à|aura pour effet)\b.*?[.;]",
         
-        # Droits/autorisations
-        r"(L'?utilisateur|Le client|Le prestataire|L'?agent|Le système)\b.*?"
-        r"(est autorisé à|peut|a le droit de)\b.*?[.;]"
-    ]
+#         # Droits/autorisations
+#         r"(L'?utilisateur|Le client|Le prestataire|L'?agent|Le système)\b.*?"
+#         r"(est autorisé à|peut|a le droit de)\b.*?[.;]"
+#     ]
+    
+#     rules = set()
+#     for pattern in patterns:
+#         matches = re.finditer(pattern, text, re.IGNORECASE)
+#         for match in matches:
+#             rule = clean_business_rule(match.group())
+#             if is_valid_rule(rule):
+#                 rules.add(rule)
+    
+#     # 3. Extraction NLP si le modèle est disponible
+#     if nlp_model:
+#         doc = nlp_model(text)
+        
+#         for sent in doc.sents:
+#             sent_text = sent.text.strip()
+            
+#             # Détection des phrases contenant des marqueurs de règles
+#             if is_business_rule_sentence(sent):
+#                 rule = clean_business_rule(sent_text)
+#                 if is_valid_rule(rule):
+#                     rules.add(rule)
+    
+#     # 4. Post-traitement des règles
+#     rules = clean_short_rules(rules)
+#     rules = sorted(rules, key=lambda x: len(x), reverse=True)
+    
+#     return rules
+
+
+#Nouveau
+def extract_business_rules(text, nlp_model):
+    """Version améliorée de l'extraction des règles de gestion"""
+    # 1. Prétraitement du texte avec segmentation améliorée
+    text = re.sub(r'([.!?])(\s+[A-ZÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ])', r'\1\n\2', text)
+    sentences = [s.strip() for s in text.split('\n') if s.strip()]
     
     rules = set()
-    for pattern in patterns:
-        matches = re.finditer(pattern, text, re.IGNORECASE)
-        for match in matches:
-            rule = clean_business_rule(match.group())
-            if is_valid_rule(rule):
-                rules.add(rule)
     
-    # 3. Extraction NLP si le modèle est disponible
-    if nlp_model:
-        doc = nlp_model(text)
-        
-        for sent in doc.sents:
-            sent_text = sent.text.strip()
+    # 2. Filtrage des phrases avec des critères plus stricts
+    for sentence in sentences:
+        # Vérification de la structure de la phrase
+        if not is_valid_sentence_structure(sentence, nlp_model):
+            continue
             
-            # Détection des phrases contenant des marqueurs de règles
-            if is_business_rule_sentence(sent):
-                rule = clean_business_rule(sent_text)
-                if is_valid_rule(rule):
-                    rules.add(rule)
+        # Extraction des règles avec des motifs plus précis
+        rule = extract_well_formed_rule(sentence)
+        if rule:
+            rules.add(rule)
     
-    # 4. Post-traitement des règles
-    rules = clean_short_rules(rules)
-    rules = sorted(rules, key=lambda x: len(x), reverse=True)
+    # 3. Post-traitement pour éviter les doublons et les règles incomplètes
+    return clean_and_deduplicate_rules(rules)
+
+def is_valid_sentence_structure(sentence, nlp_model):
+    """Vérifie que la phrase a une structure valide pour être une règle"""
+    if len(sentence.split()) < 6:  # Phrases trop courtes
+        return False
+        
+    doc = nlp_model(sentence)
     
-    return rules
+    # Doit contenir un verbe conjugué
+    has_verb = any(token.pos_ == "VERB" and token.tag_ != "INF" for token in doc)
+    
+    # Doit contenir des mots clés typiques des règles
+    keywords = ["doit", "obligatoire", "interdit", "vérifier", "valider", 
+                "si", "alors", "nécessite", "condition", "requis"]
+    has_keyword = any(keyword in sentence.lower() for keyword in keywords)
+    
+    return has_verb and has_keyword
+
+def extract_well_formed_rule(sentence):
+    """Extrait une règle bien formée"""
+    # Suppression des références (ex: "Article 12:")
+    sentence = re.sub(r'^(Article|Paragraphe|Chapitre)\s*\d+\s*[:.-]\s*', '', sentence)
+    
+    # Correction de la ponctuation
+    sentence = sentence.strip()
+    if not sentence.endswith(('.', '!', '?')):
+        sentence += '.'
+    
+    # Capitalisation
+    sentence = sentence[0].upper() + sentence[1:]
+    
+    return sentence
+
+def clean_and_deduplicate_rules(rules):
+    """Nettoie et déduplique les règles"""
+    # Regroupement par similarité sémantique
+    unique_rules = []
+    for rule in sorted(rules, key=len, reverse=True):
+        if not any(is_similar_rule(rule, existing) for existing in unique_rules):
+            unique_rules.append(rule)
+    return unique_rules
 
 # Fonctions utilitaires améliorées
 def fix_incomplete_lines(text):
@@ -339,16 +404,43 @@ def extract_pdc_from_text(text):
 # Dans votre fonction main() ou au début du script :
 if 'nlp' not in st.session_state:
     load_nlp_model()
-def generate_pdc_from_rule(rule):
-    """Génère un PDC à partir d'une règle de gestion"""
-    if 'nlp' not in st.session_state:
-        st.error("Modèle NLP non chargé")
-        return f"Vérifier que {rule}"
     
-    doc = st.session_state.nlp(rule)
-    verbs = [token.text for token in doc if token.pos_ == "VERB"]
-    action = verbs[0] if verbs else "vérifier"
-    return f"{action.capitalize()} que {rule}"
+# def generate_pdc_from_rule(rule):
+#     """Génère un PDC à partir d'une règle de gestion"""
+#     if 'nlp' not in st.session_state:
+#         st.error("Modèle NLP non chargé")
+#         return f"Vérifier que {rule}"
+    
+#     doc = st.session_state.nlp(rule)
+#     verbs = [token.text for token in doc if token.pos_ == "VERB"]
+#     action = verbs[0] if verbs else "vérifier"
+#     return f"{action.capitalize()} que {rule}"
+
+#Nouveau
+def generate_pdc_from_rule(rule):
+    """Génère un PDC bien formulé à partir d'une règle"""
+    transformations = [
+        (r'doit (.*?)\.', r'Vérifier que \1'),
+        (r'il est obligatoire de (.*?)\.', r'Contrôler que \1'),
+        (r'le système doit (.*?)\.', r'Tester que le système \1'),
+        (r'si (.*?), alors (.*?)\.', r'Vérifier que lorsque \1, alors \2')
+    ]
+    
+    for pattern, replacement in transformations:
+        if re.search(pattern, rule, re.IGNORECASE):
+            pdc = re.sub(pattern, replacement, rule, flags=re.IGNORECASE)
+            return format_pdc(pdc)
+    
+    # Transformation par défaut
+    return f"Vérifier que {rule.lower().rstrip('.')}."
+
+def format_pdc(text):
+    """Formate correctement un PDC"""
+    text = text.replace("  ", " ")
+    text = text[0].upper() + text[1:]
+    if not text.endswith('.'):
+        text += '.'
+    return text
 
 
 def compare_rules_pdc(rules, pdc_list):
@@ -359,21 +451,57 @@ def compare_rules_pdc(rules, pdc_list):
     return similarity
 
 
+# def create_test_case(pdc, index, is_manual=False):
+#     """Crée un cas de test à partir d'un PDC"""
+#     templates = [
+#         f"Le système doit satisfaire : {pdc}",
+#         f"Confirmer que {pdc}",
+#         f"Tester la conformité de : {pdc}"
+#     ]
+#     return {
+#         "ID": f"CT-{index:03d}",
+#         "Type": "Manuel" if is_manual else "Auto-généré",
+#         "PDC": pdc,
+#         "Description": random.choice(templates) if not is_manual else pdc,
+#         "Étapes": f"1. Préparer l'environnement\n2. Exécuter: {pdc}\n3. Vérifier le résultat",
+#         "Résultat attendu": f"{pdc} est correctement implémenté"
+#     }
+
+#Nouveau
 def create_test_case(pdc, index, is_manual=False):
-    """Crée un cas de test à partir d'un PDC"""
-    templates = [
-        f"Le système doit satisfaire : {pdc}",
-        f"Confirmer que {pdc}",
-        f"Tester la conformité de : {pdc}"
-    ]
+    """Crée un cas de test bien formulé"""
+    # Analyse du PDC pour déterminer le type de test
+    pdc_lower = pdc.lower()
+    if "vérifier" in pdc_lower:
+        action = "Vérification"
+    elif "contrôler" in pdc_lower:
+        action = "Contrôle"
+    elif "tester" in pdc_lower:
+        action = "Test"
+    else:
+        action = "Validation"
+    
+    # Extraction de l'objet du test
+    test_object = extract_test_object(pdc)
+    
+    # Création du cas de test structuré
     return {
         "ID": f"CT-{index:03d}",
-        "Type": "Manuel" if is_manual else "Auto-généré",
-        "PDC": pdc,
-        "Description": random.choice(templates) if not is_manual else pdc,
-        "Étapes": f"1. Préparer l'environnement\n2. Exécuter: {pdc}\n3. Vérifier le résultat",
-        "Résultat attendu": f"{pdc} est correctement implémenté"
+        "Type": "Manuel" if is_manual else "Automatisé",
+        "Titre": f"{action} de {test_object}",
+        "Description": pdc,
+        "Préconditions": "1. L'application est en état de fonctionner\n2. Les données de test sont préparées",
+        "Étapes": generate_test_steps(pdc),
+        "Résultat attendu": generate_expected_result(pdc)
     }
+
+def extract_test_object(pdc):
+    """Extrait l'objet principal du test"""
+    doc = nlp(pdc)
+    for token in doc:
+        if token.dep_ in ("dobj", "attr", "nsubj"):
+            return token.text
+    return "la fonctionnalité"
 
 
 def create_pdc_document(pdc_list):
@@ -388,6 +516,28 @@ def create_pdc_document(pdc_list):
     buffer.seek(0)
     return buffer
 
+#Ajout 
+def post_process_generated_text(text):
+    """Améliore la formulation du texte généré"""
+    # Correction des articles
+    text = re.sub(r'\b(un|une) ([aeiouyéèêh])', 
+                 lambda m: f"{m.group(1)}n {m.group(2)}" 
+                 if m.group(1) == "un" else f"{m.group(1)} {m.group(2)}", 
+                 text, flags=re.IGNORECASE)
+    
+    # Harmonisation des verbes
+    verb_mapping = {
+        r'doivent être': 'est',
+        r'peuvent être': 'est',
+        r'devrait être': 'est'
+    }
+    for pattern, replacement in verb_mapping.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    # Suppression des répétitions
+    text = re.sub(r'(\b\w+\b)(\s+\1)+', r'\1', text, flags=re.IGNORECASE)
+    
+    return text
 # ----------------------------
 # INTERFACE UTILISATEUR
 # ----------------------------
@@ -658,6 +808,27 @@ with tab5:
                     file_name="cas_de_test.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
+
+
+
+    #Ajout
+    st.subheader("Contrôle Qualité")
+    if 'test_cases' in st.session_state:
+        if st.checkbox("Afficher le contrôle de qualité des cas de test"):
+            for i, test_case in enumerate(st.session_state.test_cases):
+                with st.expander(f"Cas de test {test_case['ID']}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Original:**")
+                        st.write(test_case['Description'])
+                    with col2:
+                        improved = post_process_generated_text(test_case['Description'])
+                        st.write("**Amélioré:**")
+                        st.write(improved)
+                        if improved != test_case['Description']:
+                            if st.button(f"Appliquer la correction #{i+1}"):
+                                st.session_state.test_cases[i]['Description'] = improved
+                                st.rerun()
 
 # ----------------------------
 # PIED DE PAGE
