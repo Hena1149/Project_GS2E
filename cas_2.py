@@ -140,6 +140,7 @@ def extract_business_rules(text, nlp_model):
     # 3. Post-traitement pour éviter les doublons et les règles incomplètes
     return clean_and_deduplicate_rules(rules)
 
+
 def is_valid_sentence_structure(sentence, nlp_model):
     """Vérifie que la phrase a une structure valide pour être une règle"""
     if len(sentence.split()) < 6:  # Phrases trop courtes
@@ -538,6 +539,37 @@ def post_process_generated_text(text):
     text = re.sub(r'(\b\w+\b)(\s+\1)+', r'\1', text, flags=re.IGNORECASE)
     
     return text
+
+
+#Nouveau
+def is_similar_rule(rule1, rule2, threshold=0.7):
+    """
+    Détermine si deux règles sont similaires en utilisant la similarité cosinus
+    sur leurs embeddings vectoriels
+    """
+    # Chargez le modèle NLP s'il n'est pas déjà chargé
+    if 'nlp' not in st.session_state:
+        st.session_state.nlp = spacy.load("fr_core_news_md")
+    
+    # Traitement des deux règles
+    doc1 = st.session_state.nlp(rule1)
+    doc2 = st.session_state.nlp(rule2)
+    
+    # Calcul de la similarité (spaCy fournit cette méthode directement)
+    similarity = doc1.similarity(doc2)
+    
+    return similarity >= threshold
+
+def clean_and_deduplicate_rules(rules):
+    """Nettoie et déduplique les règles"""
+    # Regroupement par similarité sémantique
+    unique_rules = []
+    for rule in sorted(rules, key=len, reverse=True):
+        if not any(is_similar_rule(rule, existing) for existing in unique_rules):
+            unique_rules.append(rule)
+    return unique_rules
+
+
 # ----------------------------
 # INTERFACE UTILISATEUR
 # ----------------------------
