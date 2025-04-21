@@ -61,6 +61,44 @@ def extract_text(uploaded_file):
         st.error(f"Erreur d'extraction : {str(e)}")
         return None
 
+
+def clean_text(text, nlp_model, min_word_length=3):
+    """
+    Nettoyage approfondi du texte avec :
+    - Suppression des stopwords
+    - Lemmatisation
+    - Filtrage par catégorie grammaticale
+    - Suppression des mots trop courts
+    """
+    # Initialisation
+    if not text or not nlp_model:
+        return ""
+    
+    # Nettoyage de base
+    text = text.lower()
+    text = re.sub(r"[^\w\sàâäéèêëîïôöùûüç]", " ", text)  # Garde les caractères accentués
+    text = re.sub(r"\s+", " ", text).strip()
+    
+    # Traitement NLP
+    doc = nlp_model(text)
+    cleaned_tokens = []
+    
+    for token in doc:
+        # Conditions de filtrage
+        if (token.is_stop or 
+            token.is_punct or 
+            len(token.text) < min_word_length or
+            token.pos_ in ["DET", "ADP", "CCONJ", "PRON", "PART"]):
+            continue
+            
+        # Lemmatisation (forme de base)
+        lemma = token.lemma_.strip()
+        if lemma:
+            cleaned_tokens.append(lemma)
+    
+    return " ".join(cleaned_tokens)
+
+
 def clean_rule_text(rule):
     """Nettoyage intelligent des règles"""
     # Suppression des numéros et puces
