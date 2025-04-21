@@ -118,7 +118,7 @@ def load_nlp_model():
 
 
 #Nouveau
-def extract_business_rules(text, nlp_model, , sensitivity=3):
+def extract_business_rules(text, nlp_model, sensitivity=3):
     """Version optimisée pour une extraction plus complète"""
     # 1. Normalisation du texte
     text = re.sub(r'\s+', ' ', text)  # Unifie les espaces
