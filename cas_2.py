@@ -245,6 +245,15 @@ def generate_test_description(pdc):
     action = action_map.get(first_word, "Test de")
     return f"{action} {pdc[len(first_word)+1:].rstrip('.')}."
 
+def calculate_frequencies(text):
+    """Calcule les fréquences des mots dans le texte nettoyé"""
+    if not text or not isinstance(text, str):
+        return pd.Series(dtype='float64')
+    
+    # Tokenization simple (peut être améliorée avec spaCy)
+    words = re.findall(r'\b\w{3,}\b', text.lower())  # Ne garde que les mots de 3+ lettres
+    return pd.Series(words).value_counts()
+
 # ----------------------------
 # INTERFACE STREAMLIT AMÉLIORÉE
 # ----------------------------
@@ -267,6 +276,25 @@ with tab1:
                 with st.expander("Aperçu du texte"):
                     st.text(extracted_text[:1500] + ("..." if len(extracted_text) > 1500 else ""))
 
+# with tab2:
+#     st.header("Analyse Textuelle Avancée")
+    
+#     if 'text' not in st.session_state:
+#         st.warning("Veuillez d'abord extraire un texte")
+#     else:
+#         nlp_model = load_nlp_model()
+#         if not nlp_model:
+#             st.error("Modèle NLP non disponible")
+#         else:
+#             with st.spinner("Analyse linguistique en cours..."):
+#                 st.session_state.text_clean = clean_text(st.session_state.text, nlp_model)
+#                 st.session_state.freq = calculate_frequencies(st.session_state.text_clean)
+            
+#             st.subheader("Mots-clés principaux")
+#             top_n = st.slider("Nombre de mots à afficher", 5, 50, 15)
+#             st.dataframe(st.session_state.freq.head(top_n))
+
+#Nouveau
 with tab2:
     st.header("Analyse Textuelle Avancée")
     
@@ -278,12 +306,18 @@ with tab2:
             st.error("Modèle NLP non disponible")
         else:
             with st.spinner("Analyse linguistique en cours..."):
+                # Nettoyage du texte
                 st.session_state.text_clean = clean_text(st.session_state.text, nlp_model)
+                # Calcul des fréquences
                 st.session_state.freq = calculate_frequencies(st.session_state.text_clean)
             
             st.subheader("Mots-clés principaux")
             top_n = st.slider("Nombre de mots à afficher", 5, 50, 15)
-            st.dataframe(st.session_state.freq.head(top_n))
+            
+            if not st.session_state.freq.empty:
+                st.dataframe(st.session_state.freq.head(top_n))
+            else:
+                st.warning("Aucun mot-clé significatif trouvé")
 
 with tab3:
     st.header("Visualisation des Concepts")
