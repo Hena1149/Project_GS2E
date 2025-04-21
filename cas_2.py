@@ -118,27 +118,50 @@ def load_nlp_model():
 
 
 #Nouveau
-def extract_business_rules(text, nlp_model):
-    """Version améliorée de l'extraction des règles de gestion"""
-    # 1. Prétraitement du texte avec segmentation améliorée
-    text = re.sub(r'([.!?])(\s+[A-ZÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ])', r'\1\n\2', text)
-    sentences = [s.strip() for s in text.split('\n') if s.strip()]
+def extract_business_rules(text, nlp_model, , sensitivity=3):
+    """Version optimisée pour une extraction plus complète"""
+    # 1. Normalisation du texte
+    text = re.sub(r'\s+', ' ', text)  # Unifie les espaces
+    text = re.sub(r'(\n\d+[.)])', r'\1 ', text)  # Améliore les listes numérotées
+    
+    # 2. Segmentation avancée en phrases
+    sentences = []
+    for paragraph in text.split('\n'):
+        if len(paragraph.strip()) > 10:  # Ignore les lignes trop courtes
+            if nlp_model:
+                doc = nlp_model(paragraph)
+                sentences.extend([sent.text for sent in doc.sents])
+            else:
+                # Fallback si spaCy n'est pas disponible
+                sentences.extend(re.split(r'(?<=[.!?])\s+', paragraph))
+    
+    # 3. Extraction avec motifs élargis
+    patterns = [
+        r'(?i)((?:doit|devra|nécessite|obligatoire|requis|vérifier|contrôler|si\b|alors\b).{10,}?[.!?])',
+        r'(?i)\b(?:l[ea]\s+système|l\'?application)\b.{10,}?[.!?]',
+        r'(?i)(?:le\s+système\s+doit|il\s+faut\s+que)\s+.+?\s+(?:prendre\s+en\s+charge|gérer|valider)\b.+?[.!?]',
+        r'(?i)((?:lorsque|quand|dès que|en cas de).{10,}?(?:alors|donc|par conséquent).{10,}?[.!?])'
+    ]
     
     rules = set()
+    for pattern in patterns:
+        matches = re.findall(pattern, text)
+        rules.update(matches)
     
-    # 2. Filtrage des phrases avec des critères plus stricts
-    for sentence in sentences:
-        # Vérification de la structure de la phrase
-        if not is_valid_sentence_structure(sentence, nlp_model):
-            continue
-            
-        # Extraction des règles avec des motifs plus précis
-        rule = extract_well_formed_rule(sentence)
-        if rule:
-            rules.add(rule)
+    # 4. Analyse syntaxique complémentaire
+    if nlp_model:
+        for sent in sentences:
+            if is_potential_rule(sent, nlp_model):
+                rules.add(clean_rule_text(sent))
     
-    # 3. Post-traitement pour éviter les doublons et les règles incomplètes
-    return clean_and_deduplicate_rules(rules)
+    # 5. Post-traitement moins restrictif
+    return sorted(rules, key=len, reverse=True)[:500]  # Limite raisonnable
+
+    # Ajustement en fonction de la sensibilité
+    min_length = [15, 12, 10, 8, 6][sensitivity-1]
+    rules = [r for r in rules if len(r.split()) >= min_length]
+    
+    return rules[:1000//sensitivity]  # Ajustement du nombre maximal
 
 
 def is_valid_sentence_structure(sentence, nlp_model):
@@ -570,6 +593,34 @@ def clean_and_deduplicate_rules(rules):
     return unique_rules
 
 
+#Nouveau
+def is_potential_rule(sentence, nlp_model):
+    """Détection plus fine des règles potentielles"""
+    doc = nlp_model(sentence)
+    
+    # Critères positifs
+    has_obligation = any(token.lemma_ in {'devoir', 'falloir'} for token in doc)
+    has_condition = any(token.text.lower() in {'si', 'lorsque'} for token in doc)
+    has_validation = any(token.lemma_ in {'vérifier', 'contrôler'} for token in doc)
+    
+    # Critères négatifs
+    is_question = any(token.tag_ == 'INTJ' for token in doc)
+    is_example = any(token.text.lower() in {'exemple', 'par exemple'} for token in doc)
+    
+    return (len(doc) >= 8 and 
+           (has_obligation or has_condition or has_validation) and
+           not is_question and not is_example)
+
+def clean_rule_text(rule):
+    """Nettoyage moins agressif des règles"""
+    # Suppression des numéros de paragraphe
+    rule = re.sub(r'^\s*\d+[.)]\s*', '', rule)
+    # Normalisation des espaces
+    rule = re.sub(r'\s+', ' ', rule).strip()
+    # Capitalisation cohérente
+    return rule[0].upper() + rule[1:] if rule else rule
+
+
 # ----------------------------
 # INTERFACE UTILISATEUR
 # ----------------------------
@@ -707,6 +758,14 @@ with tab4:
                         st.metric("Longueur moyenne des règles", f"{avg_length:.1f} mots")
                 else:
                     st.warning("Aucune règle de gestion n'a été identifiée dans le document")
+
+     sensitivity = st.slider("Sensibilité de détection", 1, 5, 3,
+                           help="Augmentez pour plus de règles (mais moins précises)")
+    
+    if st.button("Extraire les règles"):
+        with st.spinner("Analyse en cours..."):
+            rules = extract_business_rules_v2(st.session_state.text, nlp_model, sensitivity)
+            st.session_state.rules = rules
 
 
 with tab5:
